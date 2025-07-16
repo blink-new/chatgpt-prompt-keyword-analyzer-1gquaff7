@@ -12,7 +12,7 @@ This is a sophisticated web application that automates the process of analyzing 
 - **Analytics Dashboard**: Comprehensive statistics and insights about keyword frequency and response patterns
 - **Batch CSV Upload**: Process multiple prompts with different keywords via CSV upload
 - **Export Functionality**: Export results to JSON format for further analysis
-- **Authentication**: Secure user authentication with Blink SDK
+- **No Authentication Required**: Works directly with OpenAI API key
 
 ## Tech Stack
 
@@ -25,23 +25,19 @@ This is a sophisticated web application that automates the process of analyzing 
 - **ShadCN UI** components for consistent, accessible interface
 - **Radix UI** primitives for complex components
 - **Lucide React** for icons
-- **Framer Motion** for animations
 
-### Backend & Services
-- **Blink SDK** (`@blinkdotnew/sdk`) for:
-  - User authentication
-  - AI text generation (ChatGPT integration)
-  - Database operations
-  - File storage
+### API Integration
+- **OpenAI API** (`openai` package) for ChatGPT integration
+- Direct API calls from frontend (requires API key in environment variables)
 
 ### Key Dependencies
 ```json
 {
-  "@blinkdotnew/sdk": "^0.17.3",
   "react": "^19.1.0",
   "typescript": "~5.8.3",
   "tailwindcss": "^3.3.5",
-  "lucide-react": "^0.525.0"
+  "lucide-react": "^0.525.0",
+  "openai": "^5.9.2"
 }
 ```
 
@@ -61,42 +57,68 @@ src/
 │   └── ui/                 # ShadCN UI components
 ├── types/
 │   └── index.ts           # TypeScript interfaces
-├── blink/
-│   └── client.ts          # Blink SDK configuration
-└── lib/
-    └── utils.ts           # Utility functions
+├── lib/
+│   ├── openai.ts          # OpenAI API integration
+│   └── utils.ts           # Utility functions
 ```
 
 ### Data Flow
-1. **Input Phase**: User adds prompts (up to 10) and configures keywords to track
-2. **Processing Phase**: App processes prompts sequentially through Blink AI (ChatGPT)
-3. **Analysis Phase**: Responses are analyzed for keyword matches using regex
-4. **Display Phase**: Results are displayed with highlighted keywords and analytics
+1. **Setup Phase**: User adds OpenAI API key to environment variables
+2. **Input Phase**: User adds prompts (up to 10) and configures keywords to track
+3. **Processing Phase**: App processes prompts sequentially through OpenAI API
+4. **Analysis Phase**: Responses are analyzed for keyword matches using regex
+5. **Display Phase**: Results are displayed with highlighted keywords and analytics
 
 ## Core Functionality
 
-### 1. Prompt Management (`PromptInput.tsx`)
+### 1. OpenAI Integration (`lib/openai.ts`)
+```typescript
+import OpenAI from 'openai'
+
+export const openai = new OpenAI({
+  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true // Note: In production, API calls should be made from backend
+})
+
+export async function generateTextWithOpenAI(prompt: string): Promise<string> {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 500,
+      temperature: 0.7
+    })
+    return completion.choices[0]?.message?.content || ''
+  } catch (error) {
+    console.error('OpenAI API Error:', error)
+    throw new Error(`Failed to generate response: ${error.message}`)
+  }
+}
+```
+
+### 2. Prompt Management (`PromptInput.tsx`)
 - Add/remove prompts with validation (max 10)
 - Real-time character counting and status badges
 - Keyboard shortcuts (Ctrl+Enter to add)
 - Responsive prompt preview with truncation
 
-### 2. Keyword Configuration (`KeywordConfig.tsx`)
+### 3. Keyword Configuration (`KeywordConfig.tsx`)
 - Dynamic keyword addition/removal
 - Case-insensitive duplicate prevention
 - Visual keyword badges with remove functionality
 - Empty state handling
 
-### 3. AI Processing Engine (`App.tsx`)
+### 4. AI Processing Engine (`App.tsx`)
 ```typescript
 const processPrompt = async (prompt: string, index: number, analysisId: string): Promise<PromptAnalysis> => {
   try {
-    // Generate response using Blink AI
-    const { text } = await blink.ai.generateText({
-      prompt: prompt,
-      model: 'gpt-4o-mini',
-      maxTokens: 500
-    })
+    // Update status to processing
+    setAnalyses(prev => prev.map(a => 
+      a.id === analysisId ? { ...a, status: 'processing' } : a
+    ))
+
+    // Generate response using OpenAI
+    const text = await generateTextWithOpenAI(prompt)
 
     // Find keyword matches
     const keywordMatches = findKeywordMatches(text, keywords)
@@ -124,7 +146,7 @@ const processPrompt = async (prompt: string, index: number, analysisId: string):
 }
 ```
 
-### 4. Keyword Matching Algorithm
+### 5. Keyword Matching Algorithm
 ```typescript
 const findKeywordMatches = (text: string, keywords: string[]): KeywordMatch[] => {
   return keywords.map(keyword => {
@@ -147,26 +169,26 @@ const findKeywordMatches = (text: string, keywords: string[]): KeywordMatch[] =>
 }
 ```
 
-### 5. Real-time Progress Tracking (`AnalysisProgress.tsx`)
+### 6. Real-time Progress Tracking (`AnalysisProgress.tsx`)
 - Visual progress bar with percentage completion
 - Individual prompt status indicators
 - Color-coded status badges (pending, processing, completed, error)
 - Live statistics (completed, processing, errors, pending)
 
-### 6. Results Display (`ResultsGrid.tsx`)
+### 7. Results Display (`ResultsGrid.tsx`)
 - Card-based layout for each prompt/response pair
 - Syntax highlighting for keyword matches
 - Scrollable content areas for long text
 - Status indicators and error handling
 - Keyword match badges with counts
 
-### 7. Analytics Dashboard (`AnalyticsSummary.tsx`)
+### 8. Analytics Dashboard (`AnalyticsSummary.tsx`)
 - Total statistics (prompts, responses, matches, processing time)
 - Top keywords ranking with frequency analysis
 - Progress bars for keyword distribution
 - Performance metrics
 
-### 8. Batch Processing (`BatchAnalysis.tsx`)
+### 9. Batch Processing (`BatchAnalysis.tsx`)
 - CSV file upload and parsing
 - Template download functionality
 - Bulk processing with progress tracking
@@ -222,7 +244,7 @@ npm create vite@latest chatgpt-analyzer -- --template react-ts
 cd chatgpt-analyzer
 
 # Install core dependencies
-npm install @blinkdotnew/sdk
+npm install openai
 npm install lucide-react
 npm install tailwindcss tailwindcss-animate
 npm install @radix-ui/react-progress @radix-ui/react-tabs
@@ -247,26 +269,39 @@ module.exports = {
 }
 ```
 
-### 3. Setup Blink SDK
-```typescript
-// src/blink/client.ts
-import { createClient } from '@blinkdotnew/sdk'
-
-export const blink = createClient({
-  projectId: 'your-project-id',
-  authRequired: true
-})
+### 3. Setup Environment Variables
+Create a `.env.local` file in your project root:
+```env
+VITE_OPENAI_API_KEY=your_openai_api_key_here
 ```
 
-### 4. Create Type Definitions
+**Important**: Get your API key from [OpenAI Platform](https://platform.openai.com/api-keys)
+
+### 4. Setup OpenAI Integration
+```typescript
+// src/lib/openai.ts
+import OpenAI from 'openai'
+
+export const openai = new OpenAI({
+  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true
+})
+
+export async function generateTextWithOpenAI(prompt: string): Promise<string> {
+  // Implementation as shown above
+}
+```
+
+### 5. Create Type Definitions
 Define all interfaces in `src/types/index.ts` as shown above.
 
-### 5. Build Core Components
+### 6. Build Core Components
 
-#### Authentication & Layout (`App.tsx`)
-- Implement auth state management with `blink.auth.onAuthStateChanged`
-- Create main layout with header, navigation, and content areas
-- Add sign-in/sign-out functionality
+#### Main Application (`App.tsx`)
+- Remove authentication logic (no login required)
+- Add API key validation and error handling
+- Implement sequential prompt processing
+- Add real-time status updates
 
 #### Input Components
 - **PromptInput**: Text area with add/remove functionality
@@ -282,7 +317,39 @@ Define all interfaces in `src/types/index.ts` as shown above.
 - **ResultsGrid**: Card-based results with keyword highlighting
 - **AnalyticsSummary**: Statistics and insights dashboard
 
-### 6. Implement Key Features
+### 7. Implement Key Features
+
+#### API Key Management
+```typescript
+// Check if API key is configured
+const hasApiKey = !!import.meta.env.VITE_OPENAI_API_KEY
+
+// Show warning if not configured
+{!hasApiKey && (
+  <Alert>
+    <AlertCircle className="h-4 w-4" />
+    <AlertDescription>
+      <strong>OpenAI API Key Required:</strong> Please add your OpenAI API key to the environment variables as <code>VITE_OPENAI_API_KEY</code>
+    </AlertDescription>
+  </Alert>
+)}
+```
+
+#### Error Handling
+```typescript
+const processPrompt = async (prompt: string): Promise<PromptAnalysis> => {
+  try {
+    const text = await generateTextWithOpenAI(prompt)
+    // Process successful response
+  } catch (error) {
+    // Check if it's an API key error
+    if (error.message.includes('API key')) {
+      setApiKeyError(true)
+    }
+    // Return error analysis
+  }
+}
+```
 
 #### Keyword Highlighting
 ```typescript
@@ -325,13 +392,13 @@ const exportResults = () => {
 }
 ```
 
-### 7. Styling & UI Polish
+### 8. Styling & UI Polish
 - Implement responsive design with Tailwind CSS
 - Add loading states and animations
 - Create consistent color scheme and typography
 - Add hover effects and transitions
 
-### 8. Error Handling & Validation
+### 9. Error Handling & Validation
 - Input validation for prompts and keywords
 - API error handling with user-friendly messages
 - Rate limiting protection with delays between requests
@@ -365,7 +432,7 @@ const exportResults = () => {
 
 ### Rate Limiting
 - Sequential processing to avoid API rate limits
-- Configurable delays between requests
+- Configurable delays between requests (1 second default)
 - Error handling for rate limit responses
 
 ### Memory Management
@@ -381,17 +448,22 @@ const exportResults = () => {
 
 ## Deployment
 
-### Blink Platform
-The app is designed to run on the Blink platform with:
-- Automatic authentication handling
-- Built-in AI API access
-- Integrated hosting and deployment
-- Real-time preview and testing
-
 ### Environment Setup
-- No additional API keys required (handled by Blink SDK)
-- Automatic HTTPS and domain management
-- Built-in error monitoring and logging
+1. **Get OpenAI API Key**: Visit [OpenAI Platform](https://platform.openai.com/api-keys)
+2. **Set Environment Variable**: Add `VITE_OPENAI_API_KEY=your_key_here` to `.env.local`
+3. **Build and Deploy**: Use any static hosting service (Netlify, Vercel, etc.)
+
+### Security Considerations
+- **API Key Exposure**: The current implementation exposes the API key in the browser
+- **Production Recommendation**: Move API calls to a backend server for security
+- **Rate Limiting**: Implement server-side rate limiting for production use
+
+### Build for Production
+```bash
+npm run build
+```
+
+The built files will be in the `dist` folder, ready for deployment to any static hosting service.
 
 ## Testing Strategy
 
@@ -403,9 +475,9 @@ The app is designed to run on the Blink platform with:
 
 ### Integration Testing
 - End-to-end prompt processing flow
-- Authentication state management
 - API error handling
 - Export functionality
+- Batch processing workflow
 
 ### User Testing
 - Usability testing for complex workflows
@@ -415,9 +487,13 @@ The app is designed to run on the Blink platform with:
 
 ## Future Enhancements
 
+### Security Improvements
+- **Backend API**: Move OpenAI calls to secure backend
+- **Authentication**: Add user accounts and session management
+- **API Key Management**: Secure server-side API key storage
+
 ### Potential Features
 - **Advanced Analytics**: Sentiment analysis, response categorization
-- **Collaboration**: Multi-user sessions and sharing
 - **Templates**: Pre-built prompt templates for common use cases
 - **Scheduling**: Automated batch processing on schedules
 - **Integrations**: Export to Google Sheets, Slack notifications
@@ -431,23 +507,46 @@ The app is designed to run on the Blink platform with:
 - Caching for frequently used prompts
 - Advanced rate limiting and queue management
 
+## Troubleshooting
+
+### Common Issues
+
+#### API Key Not Working
+- Verify the API key is correct and has sufficient credits
+- Check that the environment variable name is exactly `VITE_OPENAI_API_KEY`
+- Restart the development server after adding the API key
+
+#### Rate Limiting Errors
+- The app includes 1-second delays between requests
+- For heavy usage, consider increasing the delay
+- Monitor your OpenAI usage dashboard for rate limits
+
+#### CSV Upload Issues
+- Ensure CSV has "prompt" and "keywords" columns
+- Check that keywords are comma-separated within cells
+- Verify file encoding is UTF-8
+
+#### Build Issues
+- Run `npm install` to ensure all dependencies are installed
+- Check for TypeScript errors with `npm run type-check`
+- Verify all imports are correct after removing Blink SDK
+
 ## Conclusion
 
-This ChatGPT Prompt Analyzer represents a sophisticated example of modern web application development, combining:
-- **Modern React patterns** with hooks and TypeScript
-- **Beautiful UI design** with Tailwind CSS and ShadCN components
-- **Real-time processing** with progress tracking and status updates
-- **Advanced text analysis** with regex-based keyword matching
-- **Comprehensive analytics** with frequency analysis and statistics
-- **Batch processing** capabilities for scalable operations
-- **Export functionality** for data portability
+This ChatGPT Prompt Analyzer demonstrates a complete transition from a Blink SDK-based application to a standalone React application using direct OpenAI API integration. The application maintains all its core functionality while providing:
 
-The application demonstrates best practices in:
-- Component architecture and separation of concerns
-- Error handling and user experience design
-- Performance optimization and rate limiting
-- Responsive design and accessibility
-- Type safety with TypeScript
-- Modern development tooling with Vite
+- **Direct API Integration**: No dependency on external SDKs
+- **Simplified Setup**: Just requires an OpenAI API key
+- **Full Feature Set**: All original features preserved
+- **Modern Architecture**: Clean React patterns with TypeScript
+- **Production Ready**: Can be deployed to any static hosting service
 
-This project serves as an excellent foundation for building similar AI-powered analysis tools and can be extended with additional features like advanced analytics, collaboration tools, and integration capabilities.
+The application serves as an excellent example of:
+- Modern React development with hooks and TypeScript
+- Direct API integration with error handling
+- Real-time UI updates and progress tracking
+- Advanced text analysis and keyword matching
+- Responsive design and user experience
+- Export functionality and data management
+
+This project can be easily extended with additional features and serves as a solid foundation for building similar AI-powered analysis tools.

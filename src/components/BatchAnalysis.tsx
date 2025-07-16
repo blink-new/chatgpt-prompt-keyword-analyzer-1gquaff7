@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Upload, Download, FileText, Play, AlertCircle, CheckCircle } from 'lucide-react'
 import { BatchRow, BatchAnalysisSession, PromptAnalysis, KeywordMatch } from '@/types'
-import { blink } from '@/blink/client'
+import { generateTextWithOpenAI } from '@/lib/openai'
 
 interface BatchAnalysisProps {
   onBatchComplete: (results: PromptAnalysis[]) => void
@@ -21,6 +21,9 @@ export function BatchAnalysis({ onBatchComplete }: BatchAnalysisProps) {
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Check if OpenAI API key is configured
+  const hasApiKey = !!import.meta.env.VITE_OPENAI_API_KEY
 
   const downloadTemplate = () => {
     const template = `prompt,keywords
@@ -143,6 +146,10 @@ export function BatchAnalysis({ onBatchComplete }: BatchAnalysisProps) {
 
   const processBatch = async () => {
     if (batchData.length === 0) return
+    if (!hasApiKey) {
+      setError('OpenAI API key is required. Please add VITE_OPENAI_API_KEY to your environment variables.')
+      return
+    }
 
     setIsProcessing(true)
     setError(null)
@@ -178,12 +185,8 @@ export function BatchAnalysis({ onBatchComplete }: BatchAnalysisProps) {
         try {
           console.log(`Processing batch row ${i + 1}/${batchData.length}:`, row.prompt.substring(0, 50) + '...')
           
-          // Generate response using Blink AI
-          const { text } = await blink.ai.generateText({
-            prompt: row.prompt,
-            model: 'gpt-4o-mini',
-            maxTokens: 500
-          })
+          // Generate response using OpenAI
+          const text = await generateTextWithOpenAI(row.prompt)
 
           // Find keyword matches
           const keywordMatches = findKeywordMatches(text, row.keywords)
@@ -281,6 +284,16 @@ export function BatchAnalysis({ onBatchComplete }: BatchAnalysisProps) {
 
   return (
     <div className="space-y-6">
+      {/* API Key Warning */}
+      {!hasApiKey && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <strong>OpenAI API Key Required:</strong> Please add your OpenAI API key to the environment variables as <code>VITE_OPENAI_API_KEY</code> to use batch analysis.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Upload Section */}
       <Card>
         <CardHeader>
@@ -299,7 +312,7 @@ export function BatchAnalysis({ onBatchComplete }: BatchAnalysisProps) {
                 accept=".csv"
                 ref={fileInputRef}
                 onChange={handleFileUpload}
-                disabled={isProcessing}
+                disabled={isProcessing || !hasApiKey}
                 className="mt-1"
               />
             </div>
@@ -340,7 +353,7 @@ export function BatchAnalysis({ onBatchComplete }: BatchAnalysisProps) {
               <div className="flex gap-2">
                 <Button
                   onClick={processBatch}
-                  disabled={isProcessing}
+                  disabled={isProcessing || !hasApiKey}
                   className="flex items-center gap-2"
                 >
                   <Play className="w-4 h-4" />

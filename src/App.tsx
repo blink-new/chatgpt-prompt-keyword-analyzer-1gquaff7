@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { Play, Download, RotateCcw, Brain, BarChart } from 'lucide-react'
-import { blink } from '@/blink/client'
+import { Play, Download, RotateCcw, Brain, BarChart, AlertCircle } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { generateTextWithOpenAI } from '@/lib/openai'
 import { PromptInput } from '@/components/PromptInput'
 import { KeywordConfig } from '@/components/KeywordConfig'
 import { AnalysisProgress } from '@/components/AnalysisProgress'
@@ -15,22 +16,15 @@ import { BatchAnalysis } from '@/components/BatchAnalysis'
 import { PromptAnalysis, AnalysisSession, AnalyticsData, KeywordMatch } from '@/types'
 
 function App() {
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [prompts, setPrompts] = useState<string[]>([])
   const [keywords, setKeywords] = useState<string[]>([])
   const [analyses, setAnalyses] = useState<PromptAnalysis[]>([])
   const [isRunning, setIsRunning] = useState(false)
   const [currentSession, setCurrentSession] = useState<AnalysisSession | null>(null)
+  const [apiKeyError, setApiKeyError] = useState(false)
 
-  // Auth state management
-  useEffect(() => {
-    const unsubscribe = blink.auth.onAuthStateChanged((state) => {
-      setUser(state.user)
-      setLoading(state.isLoading)
-    })
-    return unsubscribe
-  }, [])
+  // Check if OpenAI API key is configured
+  const hasApiKey = !!import.meta.env.VITE_OPENAI_API_KEY
 
   // Calculate analytics
   const analytics: AnalyticsData = {
@@ -82,12 +76,8 @@ function App() {
         a.id === analysisId ? { ...a, status: 'processing' } : a
       ))
 
-      // Generate response using Blink AI
-      const { text } = await blink.ai.generateText({
-        prompt: prompt,
-        model: 'gpt-4o-mini',
-        maxTokens: 500
-      })
+      // Generate response using OpenAI
+      const text = await generateTextWithOpenAI(prompt)
 
       console.log(`Prompt ${index + 1} completed successfully. Response length:`, text.length)
 
@@ -107,6 +97,11 @@ function App() {
     } catch (error) {
       console.error(`Error processing prompt ${index + 1}:`, error)
       
+      // Check if it's an API key error
+      if (error instanceof Error && error.message.includes('API key')) {
+        setApiKeyError(true)
+      }
+      
       const errorAnalysis: PromptAnalysis = {
         id: analysisId,
         prompt,
@@ -122,10 +117,15 @@ function App() {
 
   const startAnalysis = async () => {
     if (prompts.length === 0 || keywords.length === 0) return
+    if (!hasApiKey) {
+      setApiKeyError(true)
+      return
+    }
 
     console.log('Starting analysis with:', { promptCount: prompts.length, keywords })
     
     setIsRunning(true)
+    setApiKeyError(false)
     const sessionId = `session-${Date.now()}`
     const startTime = Date.now()
 
@@ -196,6 +196,7 @@ function App() {
     setAnalyses([])
     setCurrentSession(null)
     setIsRunning(false)
+    setApiKeyError(false)
   }
 
   const exportResults = () => {
@@ -235,38 +236,7 @@ function App() {
     setCurrentSession(batchSession)
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 to-white dark:from-gray-900 dark:to-gray-800">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-              <Brain className="w-6 h-6 text-primary" />
-            </div>
-            <CardTitle>ChatGPT Prompt Analyzer</CardTitle>
-            <p className="text-muted-foreground">
-              Please sign in to start analyzing prompts
-            </p>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => blink.auth.login()} className="w-full">
-              Sign In
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  const canStart = prompts.length > 0 && keywords.length > 0 && !isRunning
+  const canStart = prompts.length > 0 && keywords.length > 0 && !isRunning && hasApiKey
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-white dark:from-gray-900 dark:to-gray-800">
@@ -284,13 +254,31 @@ function App() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">Welcome, {user.email}</Badge>
-            <Button variant="outline" onClick={() => blink.auth.logout()}>
-              Sign Out
-            </Button>
-          </div>
         </div>
+
+        {/* API Key Warning */}
+        {!hasApiKey && (
+          <Alert className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>OpenAI API Key Required:</strong> Please add your OpenAI API key to the environment variables as <code>VITE_OPENAI_API_KEY</code> to use this application.
+              <br />
+              <span className="text-sm text-muted-foreground mt-1 block">
+                Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline">OpenAI Platform</a>
+              </span>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* API Key Error */}
+        {apiKeyError && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>API Key Error:</strong> There was an issue with your OpenAI API key. Please check that it's valid and has sufficient credits.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Control Panel */}
         <Card className="mb-6">
