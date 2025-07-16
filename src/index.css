@@ -1,0 +1,102 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 222 84% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 84% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 84% 11%;
+    --primary: 239 68% 68%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 84% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 162 73% 46%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 239 68% 68%;
+    --chart-1: 239 68% 68%;
+    --chart-2: 162 73% 46%;
+    --chart-3: 43 96% 56%;
+    --chart-4: 0 84% 60%;
+    --chart-5: 258 90% 66%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222 84% 11%;
+    --foreground: 210 40% 98%;
+    --card: 217 33% 17%;
+    --card-foreground: 210 40% 98%;
+    --popover: 217 33% 17%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 239 68% 68%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217 33% 24%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 24%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 162 73% 46%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 217 33% 24%;
+    --input: 217 33% 24%;
+    --ring: 239 68% 68%;
+    --chart-1: 239 68% 68%;
+    --chart-2: 162 73% 46%;
+    --chart-3: 43 96% 56%;
+    --chart-4: 0 84% 60%;
+    --chart-5: 258 90% 66%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+
+    font-family: Inter, system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer components {
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+
+/* Custom scrollbar */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  @apply bg-muted;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/30 rounded-full;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/50;
+}
+
+/* Keyword highlighting */
+mark {
+  @apply bg-yellow-200 dark:bg-yellow-800 px-1 rounded text-foreground;
+}
