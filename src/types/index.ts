@@ -32,3 +32,20 @@ export interface AnalyticsData {
   keywordFrequency: Record<string, number>
   processingTime: number
 }
+
+export interface BatchRow {
+  prompt: string
+  keywords: string[]
+}
+
+export interface BatchAnalysisSession {
+  id: string
+  name: string
+  rows: BatchRow[]
+  results: PromptAnalysis[]
+  startTime: number
+  endTime?: number
+  status: 'idle' | 'running' | 'completed' | 'error'
+  totalRows: number
+  processedRows: number
+}

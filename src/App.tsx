@@ -11,6 +11,7 @@ import { KeywordConfig } from '@/components/KeywordConfig'
 import { AnalysisProgress } from '@/components/AnalysisProgress'
 import { ResultsGrid } from '@/components/ResultsGrid'
 import { AnalyticsSummary } from '@/components/AnalyticsSummary'
+import { BatchAnalysis } from '@/components/BatchAnalysis'
 import { PromptAnalysis, AnalysisSession, AnalyticsData, KeywordMatch } from '@/types'
 
 function App() {
@@ -216,6 +217,24 @@ function App() {
     URL.revokeObjectURL(url)
   }
 
+  const handleBatchComplete = (batchResults: PromptAnalysis[]) => {
+    // Add batch results to main analyses
+    setAnalyses(prev => [...prev, ...batchResults])
+    
+    // Create a session for the batch
+    const batchSession: AnalysisSession = {
+      id: `batch-session-${Date.now()}`,
+      prompts: batchResults.map(r => r.prompt),
+      keywords: [], // Keywords are per-prompt in batch mode
+      results: batchResults,
+      startTime: Math.min(...batchResults.map(r => r.timestamp)),
+      endTime: Math.max(...batchResults.map(r => r.timestamp)),
+      status: 'completed'
+    }
+    
+    setCurrentSession(batchSession)
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -325,14 +344,29 @@ function App() {
         )}
 
         {/* Results */}
-        <Tabs defaultValue="results" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="results">Results</TabsTrigger>
+        <Tabs defaultValue="manual" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="manual">Manual Analysis</TabsTrigger>
+            <TabsTrigger value="batch">Batch Analysis</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="results" className="space-y-6">
-            <ResultsGrid analyses={analyses} />
+          <TabsContent value="manual" className="space-y-6">
+            <ResultsGrid analyses={analyses.filter(a => !a.id.startsWith('batch-analysis-'))} />
+          </TabsContent>
+
+          <TabsContent value="batch" className="space-y-6">
+            <BatchAnalysis onBatchComplete={handleBatchComplete} />
+            {analyses.filter(a => a.id.startsWith('batch-analysis-')).length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Batch Results</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResultsGrid analyses={analyses.filter(a => a.id.startsWith('batch-analysis-'))} />
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="analytics" className="space-y-6">
