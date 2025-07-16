@@ -72,20 +72,13 @@ function App() {
     }).filter(match => match.count > 0)
   }
 
-  const processPrompt = async (prompt: string, index: number): Promise<PromptAnalysis> => {
-    const analysis: PromptAnalysis = {
-      id: `analysis-${Date.now()}-${index}`,
-      prompt,
-      response: '',
-      keywordMatches: [],
-      timestamp: Date.now(),
-      status: 'processing'
-    }
-
+  const processPrompt = async (prompt: string, index: number, analysisId: string): Promise<PromptAnalysis> => {
     try {
+      console.log(`Processing prompt ${index + 1}/${prompts.length}:`, prompt.substring(0, 50) + '...')
+      
       // Update status to processing
       setAnalyses(prev => prev.map(a => 
-        a.id === analysis.id ? { ...a, status: 'processing' } : a
+        a.id === analysisId ? { ...a, status: 'processing' } : a
       ))
 
       // Generate response using Blink AI
@@ -95,27 +88,42 @@ function App() {
         maxTokens: 500
       })
 
+      console.log(`Prompt ${index + 1} completed successfully. Response length:`, text.length)
+
       // Find keyword matches
       const keywordMatches = findKeywordMatches(text, keywords)
 
-      return {
-        ...analysis,
+      const completedAnalysis: PromptAnalysis = {
+        id: analysisId,
+        prompt,
         response: text,
         keywordMatches,
+        timestamp: Date.now(),
         status: 'completed'
       }
+
+      return completedAnalysis
     } catch (error) {
-      return {
-        ...analysis,
+      console.error(`Error processing prompt ${index + 1}:`, error)
+      
+      const errorAnalysis: PromptAnalysis = {
+        id: analysisId,
+        prompt,
+        response: '',
+        keywordMatches: [],
+        timestamp: Date.now(),
         status: 'error',
         error: error instanceof Error ? error.message : 'Unknown error occurred'
       }
+      return errorAnalysis
     }
   }
 
   const startAnalysis = async () => {
     if (prompts.length === 0 || keywords.length === 0) return
 
+    console.log('Starting analysis with:', { promptCount: prompts.length, keywords })
+    
     setIsRunning(true)
     const sessionId = `session-${Date.now()}`
     const startTime = Date.now()
@@ -141,11 +149,14 @@ function App() {
       status: 'pending'
     }))
     setAnalyses(initialAnalyses)
+    
+    console.log('Initialized analyses:', initialAnalyses.map(a => ({ id: a.id, status: a.status })))
 
     // Process prompts sequentially to avoid rate limits
     const results: PromptAnalysis[] = []
     for (let i = 0; i < prompts.length; i++) {
-      const result = await processPrompt(prompts[i], i)
+      const analysisId = initialAnalyses[i].id
+      const result = await processPrompt(prompts[i], i, analysisId)
       results.push(result)
       
       // Update analyses with the completed result
@@ -161,6 +172,15 @@ function App() {
 
     // Complete session
     const endTime = Date.now()
+    const processingTime = endTime - startTime
+    
+    console.log('Analysis completed:', { 
+      totalResults: results.length, 
+      successful: results.filter(r => r.status === 'completed').length,
+      errors: results.filter(r => r.status === 'error').length,
+      processingTime: `${processingTime}ms`
+    })
+    
     setCurrentSession(prev => prev ? {
       ...prev,
       results,
